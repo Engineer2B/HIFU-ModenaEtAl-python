@@ -71,6 +71,7 @@ def Splitting_the_groups(ray_tot, alpha, alphaS, alphaL, type_mat, Const7, Const
         pressure_one = np.sqrt(intensit * 2 * z) * np.exp(1j * phase)
         # including interference
         pressure = pressure + pressure_one
+
         # bone
         phase_long = phase_long / (np.maximum(nrays_l, one_matrix))
         phase_shear = phase_shear / (np.maximum(nrays_s, one_matrix))
@@ -82,7 +83,6 @@ def Splitting_the_groups(ray_tot, alpha, alphaS, alphaL, type_mat, Const7, Const
         A1 = np.sqrt(Const3 * (int_long * 1e4))
 
         # including interference
-
 
         vl1 = vl1 + A1 * Const4 * np.exp(1j * phase_long) * (kl1 ** 2) + B1 * Const7 * np.exp(1j * phase_shear) * (
                 ks1 * pol1)
@@ -140,6 +140,7 @@ def intensity(rays, alpha, alphaS, alphaL,type_mat, k, kL, kS, Nx, Ny, Nz, xmin,
         elif start[0] > xmax:
             if vray[0] < 0:
                 lambda_x = (xxb - start[0]) / vray[0]
+                lambda_x = np.flip(lambda_x, 0)
             else:
                 lambda_x = array([float('Inf')])
 
@@ -169,6 +170,7 @@ def intensity(rays, alpha, alphaS, alphaL,type_mat, k, kL, kS, Nx, Ny, Nz, xmin,
             elif start[1] > ymax:
                 if vray[1] < 0:
                     lambda_y = (yyb - start[1]) / vray[1]
+                    lambda_y = np.flip(lambda_y, 0)
                 else:
                     lambda_y = np.array([float('Inf')])
 

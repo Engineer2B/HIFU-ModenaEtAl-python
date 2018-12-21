@@ -76,8 +76,8 @@ theta_max = np.arcsin(sin_theta_max)
 cos_theta_max = np.cos(theta_max)
 AA = 1 - cos_theta_max
 
-IntTot = integrate.quad(lambda x: np.sin(x) * (2* special.j1(k_r * x) / (k_r * x) )**2, 0.0000001, np.pi / 2)
-IntRestr = integrate.quad(lambda x: np.sin(x) * (2* special.j1(k_r * x) / (k_r * x) )**2, 0.0000001, theta_max)
+IntTot = integrate.quad(lambda x: np.sin(x) * (2* special.j1(k_r * x) / (k_r * x) )**2, 0.00000001, np.pi / 2)
+IntRestr = integrate.quad(lambda x: np.sin(x) * (2* special.j1(k_r * x) / (k_r * x) )**2, 0.00000001, theta_max)
 powerfr = IntRestr[0] / IntTot[0]
 
 # ---------------------------------------------------
@@ -88,9 +88,9 @@ powerfr = IntRestr[0] / IntTot[0]
 for o in range(len(top)):
     if top[o].material.name == 'lossless':
         index = o
-Nrays = 100# nrays per trd element
+Nrays = 20000# nrays per trd element
 # creation of the lists of cubes
-cubes = tp.creation_cubes(top, -1-0.5, -1+0.5, -0.3, 0.3, -0.3, 0.3, 0.02, 0.02, 0.02)
+cubes = tp.creation_cubes(top, -1-0.5, 0, -0.3, 0.3, -0.3, 0.3, 0.02, 0.02, 0.02)
 cubes_1 = pd.DataFrame([vars(s) for s in cubes])
 cubes_1 = cubes_1.astype('object')
 
@@ -135,13 +135,13 @@ eps_2_3 = 0
 pres = 0
 
 
-
 start_time = time.time()
 Ntrd = len(trd.coord)
-Ntrd = 1
+#Ntrd = 130
 for i in range(0, Ntrd):
     ray_prova, ptrd = gr.generation_rays_lossless(trd, top, Nrays, last_x, first_x, i, AA, k_r,index)
     ray_tot = gr.Generation_ray(top, ray_prova, last_x, first_x)
+    ptrd_tot = ptrd_tot + ptrd
     if len(ray_tot) > 0 :
         vl1, vl2, vl3, eps12, eps13, eps23, pressure_one = clc_int.Splitting_the_groups(ray_tot, alpha, alphaS, alphaL, type_mat, Const7,
                                                                                               Const4, Const6,Const3, k, kL, kS,
@@ -153,8 +153,8 @@ for i in range(0, Ntrd):
         eps_1_3 = eps_1_3 + eps13
         eps_2_3 = eps_2_3 + eps23
         pres = pres + pressure_one
-        A = pres.max()
-        ptrd_tot = ptrd_tot + ptrd
+
+
 
 
     print(i)
@@ -175,7 +175,6 @@ Q_bone = (xi+4*eta/3)*(np.abs(vl_1)**2+np.abs(vl_2)**2+np.abs(vl_3)**2)/2 + \
 (xi-2*eta/3) *(np.abs(vl_1)*np.abs(vl_2)*np.cos(phiv1-phiv2)+ \
  np.abs(vl_1)*np.abs(vl_3)*np.cos(phiv1-phiv3)+np.abs(vl_2)*np.abs(vl_3)*np.cos(phiv2-phiv3))
 
-
 z = (np.array(cubes_1['material'].apply(lambda v: v.z).values.reshape([Nx,Ny,Nz])))
 Q_soft = 2* alpha*((np.abs(pres**2))/(2*z))
 
@@ -184,7 +183,9 @@ PowerCorrectionFactor = powerfr*RequiredTotalPower/ptrd_tot
 
 Q_bone = Q_bone * PowerCorrectionFactor * 1e-6
 Q_soft = Q_soft * PowerCorrectionFactor
-Qtot= Q_bone + Q_soft
+Qtot = Q_bone + Q_soft
+print(PowerCorrectionFactor)
+print(Qtot[11,15,29])
 
 # ========= Print On a txt file ========== #
 

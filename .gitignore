@@ -1,1 +1,3 @@
 .pylint.d
+__pycache__
+fontlist-v300.json

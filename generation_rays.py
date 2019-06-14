@@ -12,7 +12,8 @@ from numpy import linalg as LA
 # top is the list of objects of the class Topology
 # This Function is called for every trd element -> 256 times for Sonalleve transducer
 
-def generation_rays_lossless(trd, top,  Nrays, final_geometry, initial_geometry, index_trd, AA,k_r,index): # r_1 first zero bessel
+
+def generation_rays_lossless(trd, top,  Nrays, final_geometry, initial_geometry, index_trd, AA, k_r, index):  # r_1 first zero bessel
     ptrd_1 = 0
     start = ([trd.coord[index_trd, 1], trd.coord[index_trd, 2], trd.coord[index_trd, 3]])
     start = np.asanyarray(start)
@@ -21,23 +22,29 @@ def generation_rays_lossless(trd, top,  Nrays, final_geometry, initial_geometry,
     v2_norm = v2 / LA.norm(v2)
     v3 = np.cross(v2_norm, normal)
     v3 = v3 / LA.norm(v3)
-    r_loss=[]
+    r_loss = []
+    # file_vray = open('vray_cylinder.txt', 'w')
+    # vray_x, vray_y, vray_z = np.genfromtxt('vray_cylinder.txt', unpack=True)
     for j in range(0, Nrays):
         rd = np.random.random_sample()
-        #rd = 0.07
+        # rd = 0.07
         theta = np.arccos(1 - AA*rd)
         phi = 2 * np.pi * np.random.random_sample()
-        #phi = 2 * np.pi * 0.06
+        # phi = 2 * np.pi * 0.06
         vray = normal + np.tan(theta)*(np.cos(phi)*v2_norm + np.sin(phi)*v3)
-        vray = vray / LA.norm(vray)
+        # vray = np.asarray([vray_x[j], vray_y[j], vray_z[j]])
+        # vray_trd = np.real(vray)
+        # vray_trd = vray_trd.tolist()
+        # vray_trd = ' '.join(str(e) for e in vray_trd)
+        # file_vray.write(vray_trd + '\n')
         B = k_r * np.sin(theta)
         if B == 0:
             scaling = 1
         else:
-            scaling = (2 * special.j1(B) / B )**2
+            scaling = (2 * special.j1(B) / B)**2
         I0 = scaling
         ptrd_1 = ptrd_1 + I0
-        next_obj, end, nn, lambda_int = inter.intersection(start, vray, top,
+        next_obj, end, nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                     index,
                                                                     final_geometry,
                                                                     initial_geometry)
@@ -45,11 +52,12 @@ def generation_rays_lossless(trd, top,  Nrays, final_geometry, initial_geometry,
         path.append(index)
         phi_initial = 0
         phase_shift = 0
-        real_dist = np.dot((end -start), nn)/np.dot(vray, nn)
+        real_dist = np.dot((end - start), nn)/np.dot(vray, nn)
         phi_final = phi_initial + top[index].material.k * lambda_int
         r = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift,
                                          0, index, next_obj, nn, I0)
         r_loss.append(r)
+    # file_vray.close()
     return r_loss, ptrd_1
 
 
@@ -58,12 +66,12 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
     I_limit = 0.0001
     control = ray
 
-    while len(control)!= 0:
+    while len(control) != 0:
         processing = control
         control = []
         for o in range(0, len(processing)):
             # NEXT MATERIAL IS SOFT?
-            if top[processing[o].next_obj].material.type == 'liquid': # next material is soft
+            if top[processing[o].next_obj].material.type == 'liquid':  # next material is soft
                 # ACTUAL MATERIAL IS SOFT?
                 if top[processing[o].obj_index].material.type == 'liquid':  # actual material soft SOFT->SOFT
                     nn = processing[o].nn
@@ -81,58 +89,97 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
                                                                top[processing[o].next_obj].material.rho * 1e6)
                     #refraction In soft tissue
                     if processing[o].IF > I_limit:
-                        if refr == True and top[processing[o].next_obj].material.name != 'lossless': #I have refraction
+                        if refr == True and top[processing[o].next_obj].material.name != 'lossless': # I have refraction
                             start = processing[o].end
                             I0 = processing[o].IF * T
                             vray = v_out / LA.norm(v_out)
-                            next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                            next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                         processing[o].next_obj,
                                                                                         final_geometry,
                                                                                         initial_geometry)
-
-                            if isinstance(possible_nn, str): # if possible nn is a string and not a vector
-                                IF = 0
-                            else:
-                                IF = I0 * np.exp(-2 * top[processing[o].next_obj].material.alpha * lambda_int)
-                            lst = []
-                            lst.append(processing[o].next_obj)
-                            path = (processing[o].path)+ lst
-                            phi_initial = processing[o].phase_final + Ph_tr
-                            phi_final = phi_initial + top[processing[o].next_obj].material.k * lambda_int
-                            phase_shift = processing[o].phase_shift + Ph_tr
-                            sn = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift, 0, processing[o].next_obj, next_obj,possible_nn, IF,0, False)
-                            son.append(sn)
-                            if IF > I_limit:
-                                control.append(sn)
+                            # if np.abs(next_obj - processing[o].next_obj) == 2:
+                            #     # processing[o].next_obj = int(np.abs((next_obj + processing[o].next_obj)) / 2)
+                            #     print("Buggy1.1\n")
+                            #     stop_ray = True
+                            # elif next_obj == processing[o].next_obj and not isinstance(possible_nn, str):
+                            #     # processing[o].next_obj += 1
+                            #     print("Buggy1.2\n")
+                            #     stop_ray = True
+                            # elif processing[o].next_obj == 2 and isinstance(possible_nn, str):
+                            #     # processing[o].next_obj = 1
+                            #     print("Buggy1.3\n")
+                            #     stop_ray = True
+                            # elif (end[0] == -8 or end[0] == 2) and processing[o].next_obj == 2:
+                            #     print("Buggy1.4\n")
+                            #     stop_ray = True
+                            # else:
+                            #     stop_ray = False
+                            if stop_ray is False:
+                                if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
+                                    IF = 0
+                                else:
+                                    IF = I0 * np.exp(-2 * top[processing[o].next_obj].material.alpha * lambda_int)
+                                lst = []
+                                lst.append(processing[o].next_obj)
+                                path = processing[o].path + lst
+                                phi_initial = processing[o].phase_final + Ph_tr
+                                phi_final = phi_initial + top[processing[o].next_obj].material.k * lambda_int
+                                phase_shift = processing[o].phase_shift + Ph_tr
+                                sn = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift, 0, processing[o].next_obj, next_obj, possible_nn, IF, 0, False)
+                                son.append(sn)
+                                if IF > I_limit:
+                                    control.append(sn)
                         if R != 0 and top[processing[o].next_obj].material.name != 'lossless':
                             if processing[o].IF > I_limit:
                                 v_out = rf.reflection(processing[o].vray, nn)
                                 vray = v_out / LA.norm(v_out)
                                 start = processing[o].end
                                 I0 = processing[o].IF * R
-                                next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                                next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                             processing[o].obj_index,
                                                                                             final_geometry,
                                                                                             initial_geometry)
-                                if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
-                                    IF = 0
-                                else:
-                                    IF = I0 * np.exp(-2 * top[processing[o].obj_index].material.alpha * lambda_int)
+                                # if np.abs(next_obj - processing[o].obj_index) == 2:
+                                #     # processing[o].obj_index = int(np.abs((next_obj + processing[o].obj_index)) / 2)
+                                #     print("Buggy2.1\n")
+                                #     stop_ray = True
+                                # elif next_obj == processing[o].obj_index and not isinstance(possible_nn, str):
+                                #     # processing[o].obj_index += 1
+                                #     print("Buggy2.2\n")
+                                #     stop_ray = True
+                                # elif processing[o].obj_index == 2 and isinstance(possible_nn, str):
+                                #     # processing[o].obj_index = 1
+                                #     print("Buggy2.3\n")
+                                #     stop_ray = True
+                                # elif (end[0] == -8 or end[0] == -1) and processing[o].obj_index == 2:
+                                #     print("Buggy2.4\n")
+                                #     stop_ray = True
+                                # else:
+                                #     stop_ray = False
+                                if stop_ray is False:
+                                    if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
+                                        IF = 0
+                                    else:
+                                        IF = I0 * np.exp(-2 * top[processing[o].obj_index].material.alpha * lambda_int)
 
-                                lst = []
-                                lst.append(processing[o].obj_index)
-                                path = (processing[o].path) + lst
-                                phi_initial = processing[o].phase_final + Ph_refl
-                                phi_final = phi_initial + top[processing[o].obj_index].material.k * lambda_int
-                                phase_shift = processing[o].phase_shift + Ph_refl
-                                sn = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift,
-                                         0, processing[o].obj_index, next_obj, possible_nn, IF,0, False)
-                                son.append(sn)
-                                if IF > I_limit:
-                                    control.append(sn)
+                                    lst = []
+                                    lst.append(processing[o].obj_index)
+                                    path = (processing[o].path) + lst
+                                    phi_initial = processing[o].phase_final + Ph_refl
+                                    phi_final = phi_initial + top[processing[o].obj_index].material.k * lambda_int
+                                    phase_shift = processing[o].phase_shift + Ph_refl
+                                    sn = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift,
+                                             0, processing[o].obj_index, next_obj, possible_nn, IF,0, False)
+                                    son.append(sn)
+                                    if IF > I_limit:
+                                        control.append(sn)
                 # ACTUAL MATERIAL IS NOT SOFT! RAY IS IN BONE!!
                 else:
-
+                    #print('coming here?')
+                    #print('actual material is not soft???')
+                    #print(processing[o].end)
+                    #print(processing[o].start)
+                    #print(processing[o].nn)
                     nn = processing[o].nn
                     alpha_in = np.arccos(np.abs(np.dot(nn, processing[o].vray)))
                     rho_liquid = top[processing[o].next_obj].material.rho * 1e6
@@ -153,75 +200,127 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
                             v_out = rf.reflection(processing[o].vray, nn)
                             vray = v_out / LA.norm(v_out)
                             start = processing[o].end
-                            next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                            next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                         processing[o].obj_index,
                                                                                         final_geometry,
                                                                                         initial_geometry)
-
-                            IF = intens_long_reflect * np.exp(-2 * top[processing[o].obj_index].material.alphaL * lambda_int)
-                            lst = []
-                            lst.append(processing[o].obj_index)
-                            path = processing[o].path + lst
-                            Ph_refl_long = 0  # to change!!!! Maybe there's a phase shift
-                            phi_initial = processing[o].phase_final + Ph_refl_long
-                            phi_final = phi_initial + top[processing[o].obj_index].material.kL* lambda_int
-                            phase_shift = processing[o].phase_shift + Ph_refl_long
-                            sn = Ray(start, end, vray, path, intens_long_reflect, phi_initial, phi_final, phase_shift,
-                                     0, processing[o].obj_index, next_obj, possible_nn, IF, 0, False)
-                            son.append(sn)
-                            if IF > I_limit:
-                                control.append(sn)
+                            # if np.abs(next_obj - processing[o].obj_index) == 2:
+                            #     # processing[o].obj_index = int(np.abs((next_obj + processing[o].obj_index)) / 2)
+                            #     print("Buggy3.1\n")
+                            #     stop_ray = True
+                            # elif next_obj == processing[o].obj_index and not isinstance(possible_nn, str):
+                            #     # processing[o].obj_index += 1
+                            #     print("Buggy3.2\n")
+                            #     stop_ray = True
+                            # elif processing[o].obj_index == 2 and isinstance(possible_nn, str):
+                            #     # processing[o].obj_index = 1
+                            #     print("Buggy3.3\n")
+                            #     stop_ray = True
+                            # elif (end[0] == -8 or end[0] == 2) and processing[o].obj_index == 2:
+                            #     print("Buggy3.4\n")
+                            #     stop_ray = True
+                            # else:
+                            #     stop_ray = False
+                            if stop_ray is False:
+                                IF = intens_long_reflect * np.exp(-2 * top[processing[o].obj_index].material.alphaL * lambda_int)
+                                lst = []
+                                lst.append(processing[o].obj_index)
+                                path = processing[o].path + lst
+                                Ph_refl_long = 0  # to change!!!! Maybe there's a phase shift
+                                phi_initial = processing[o].phase_final + Ph_refl_long
+                                phi_final = phi_initial + top[processing[o].obj_index].material.kL * lambda_int
+                                phase_shift = processing[o].phase_shift + Ph_refl_long
+                                sn = Ray(start, end, vray, path, intens_long_reflect, phi_initial, phi_final, phase_shift,
+                                         0, processing[o].obj_index, next_obj, possible_nn, IF, 0, False)
+                                son.append(sn)
+                                if IF > I_limit:
+                                    control.append(sn)
                         # REFLECTED SHEAR
                         if intens_shear_reflec > I_limit:
                             refl, v_out, poldir = rf.reflection2(processing[o].vray, nn, c_long_solid, c_long_liquid)
                             vray = v_out / LA.norm(v_out)
                             start = processing[o].end
-                            next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                            next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                         processing[o].obj_index,
                                                                                         final_geometry,
                                                                                         initial_geometry)
-
-                            IF = intens_long_reflect * np.exp(-2 * top[processing[o].obj_index].material.alphaS * lambda_int)
-                            lst = []
-                            lst.append(processing[o].obj_index)
-                            path = (processing[o].path) + lst
-                            Ph_refl_shear = 0  # to change!!!! Maybe there's a phase shift
-                            phi_initial = processing[o].phase_final + Ph_refl_shear
-                            phi_final = phi_initial + top[processing[o].obj_index].material.kS * lambda_int
-                            phase_shift = processing[o].phase_shift + Ph_refl_shear
-                            sn = Ray(start, end, vray, path, intens_long_reflect, phi_initial, phi_final, phase_shift,
-                                     0, processing[o].obj_index, next_obj, possible_nn, IF, poldir, True)
-                            son.append(sn)
-                            if IF > I_limit:
-                                control.append(sn)
-                        # REFRACTED LONGITUDINAL
-                        if intens_long_refract > I_limit:
-
-                            refr, v_out, piero = rf.refraction(processing[o].vray, nn, c_long_solid, c_long_liquid)
-                            if refr == True:  # I have refraction
-                                start = processing[o].end
-                                vray = v_out / LA.norm(v_out)
-                                next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
-                                                                                            processing[o].next_obj,
-                                                                                            final_geometry,
-                                                                                            initial_geometry)
-
-                                if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
-                                    IF = 0
-                                else:
-                                    IF = intens_long_refract * np.exp(-2 * top[processing[o].next_obj].material.alpha * lambda_int)
+                            # if np.abs(next_obj - processing[o].obj_index) == 2:
+                            #     # processing[o].obj_index = int(np.abs((next_obj + processing[o].obj_index)) / 2)
+                            #     print("Buggy4.1\n")
+                            #     stop_ray = True
+                            # elif next_obj == processing[o].obj_index and not isinstance(possible_nn, str):
+                            #     # processing[o].obj_index += 1
+                            #     print("Buggy4.2\n")
+                            #     stop_ray = True
+                            # elif processing[o].obj_index == 2 and isinstance(possible_nn, str):
+                            #     # processing[o].obj_index = 1
+                            #     print("Buggy4.3\n")
+                            #     stop_ray = True
+                            # elif (end[0] == -8 or end[0] == 2) and processing[o].obj_index == 2:
+                            #     print("Buggy4.4\n")
+                            #     stop_ray = True
+                            # else:
+                            #     stop_ray = False
+                            if stop_ray is False:
+                                IF = intens_long_reflect * np.exp(-2 * top[processing[o].obj_index].material.alphaS * lambda_int)
                                 lst = []
-                                lst.append(processing[o].next_obj)
+                                lst.append(processing[o].obj_index)
                                 path = (processing[o].path) + lst
-                                Ph_tr_shift = 0 #TO CHANGE!!! CAN BE DIFFERENT
-                                phi_initial = processing[o].phase_final + Ph_tr_shift
-                                phi_final = phi_initial + top[processing[o].next_obj].material.k * lambda_int
-                                phase_shift = processing[o].phase_shift + Ph_tr_shift
-                                sn = Ray(start, end, vray, path, intens_long_refract, phi_initial, phi_final, phase_shift, 0,
-                                         processing[o].next_obj, next_obj, possible_nn, IF, 0, False)
+                                Ph_refl_shear = 0  # to change!!!! Maybe there's a phase shift
+                                phi_initial = processing[o].phase_final + Ph_refl_shear
+                                phi_final = phi_initial + top[processing[o].obj_index].material.kS * lambda_int
+                                phase_shift = processing[o].phase_shift + Ph_refl_shear
+                                sn = Ray(start, end, vray, path, intens_long_reflect, phi_initial, phi_final, phase_shift,
+                                         0, processing[o].obj_index, next_obj, possible_nn, IF, poldir, True)
                                 son.append(sn)
                                 if IF > I_limit:
                                     control.append(sn)
+                        # REFRACTED LONGITUDINAL
+                        if intens_long_refract > I_limit:
+
+                            refr, v_out, useless = rf.refraction(processing[o].vray, nn, c_long_solid, c_long_liquid)
+                            if refr == True:  # I have refraction
+                                start = processing[o].end
+                                vray = v_out / LA.norm(v_out)
+                                next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
+                                                                                            processing[o].next_obj,
+                                                                                            final_geometry,
+                                                                                            initial_geometry)
+                                # if np.abs(next_obj - processing[o].next_obj) == 2:
+                                #     # processing[o].next_obj = int(np.abs((next_obj + processing[o].next_obj)) / 2)
+                                #     print("Buggy5.1\n")
+                                #     stop_ray = True
+                                # elif next_obj == processing[o].next_obj and not isinstance(possible_nn, str):
+                                #     # processing[o].next_obj += 1
+                                #     print("Buggy5.2\n")
+                                #     stop_ray = True
+                                # elif processing[o].next_obj == 2 and isinstance(possible_nn, str):
+                                #     # processing[o].next_obj = 1
+                                #     print("Buggy5.3\n")
+                                #     stop_ray = True
+                                # elif (end[0] == -8 or end[0] == 2) and processing[o].next_obj == 2:
+                                #     print("Buggy5.4\n")
+                                #     stop_ray = True
+                                # else:
+                                #     stop_ray = False
+                                if stop_ray is False:
+                                    if isinstance(possible_nn, str):  # if possible_nn is a string and not a vector
+                                        IF = 0
+                                    else:
+                                        IF = intens_long_refract * np.exp(-2 * top[processing[o].next_obj].material.alpha * lambda_int)
+                                    lst = []
+                                    lst.append(processing[o].next_obj)
+                                    path = (processing[o].path) + lst
+                                    Ph_tr_shift = 0 #TO CHANGE!!! CAN BE DIFFERENT
+
+                                    phi_initial = processing[o].phase_final + Ph_tr_shift
+                                    phi_final = phi_initial + top[processing[o].next_obj].material.k * lambda_int
+                                    phase_shift = processing[o].phase_shift + Ph_tr_shift
+                                    sn = Ray(start, end, vray, path, intens_long_refract, phi_initial, phi_final, phase_shift, 0,
+                                             processing[o].next_obj, next_obj, possible_nn, IF, 0, False)
+                                    son.append(sn)
+                                    if IF > I_limit:
+                                        control.append(sn)
                     else: #  it's a shear wave. Shear: reflected shear horiz pol, reflected shear vert pol, reflected long, refracted long
 
                         v_out, vpol_dir_in, vpol_dir_refl, hpol_dir = rf.reflection3(processing[o].vray, nn)
@@ -235,25 +334,42 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
                         if intensity_horcomp > I_limit:  # SHEAR HORIZONATAL REFLECTED
                             vray = v_out / LA.norm(v_out)
                             start = processing[o].end
-                            next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                            next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                         processing[o].obj_index,
                                                                                         final_geometry,
                                                                                         initial_geometry)
-
-                            IF = intensity_horcomp * np.exp(
-                                -2 * top[processing[o].obj_index].material.alphaS * lambda_int)
-                            lst = []
-                            lst.append(processing[o].obj_index)
-                            path = (processing[o].path) + lst
-                            Ph_refl_shear = 0  # to change!!!! Maybe there's a phase shift
-                            phi_initial = processing[o].phase_final + Ph_refl_shear
-                            phi_final = phi_initial + top[processing[o].obj_index].material.kS * lambda_int
-                            phase_shift = processing[o].phase_shift + Ph_refl_shear
-                            sn = Ray(start, end, vray, path, intensity_horcomp, phi_initial, phi_final, phase_shift,
-                                     0, processing[o].obj_index, next_obj, possible_nn, IF, hpol_dir, True)
-                            son.append(sn)
-                            if IF > I_limit:
-                                control.append(sn)
+                            # if np.abs(next_obj - processing[o].obj_index) == 2:
+                            #     # processing[o].obj_index = int(np.abs((next_obj + processing[o].obj_index)) / 2)
+                            #     print("Buggy6.1\n")
+                            #     stop_ray = True
+                            # elif next_obj == processing[o].obj_index and not isinstance(possible_nn, str):
+                            #     # processing[o].obj_index += 1
+                            #     print("Buggy6.2\n")
+                            #     stop_ray = True
+                            # elif processing[o].obj_index == 2 and isinstance(possible_nn, str):
+                            #     # processing[o].obj_index = 1
+                            #     print("Buggy6.3\n")
+                            #     stop_ray = True
+                            # elif (end[0] == -8 or end[0] == 2) and processing[o].obj_index == 2:
+                            #     print("Buggy6.4\n")
+                            #     stop_ray = True
+                            # else:
+                            #     stop_ray = False
+                            if stop_ray is False:
+                                IF = intensity_horcomp * np.exp(
+                                    -2 * top[processing[o].obj_index].material.alphaS * lambda_int)
+                                lst = []
+                                lst.append(processing[o].obj_index)
+                                path = (processing[o].path) + lst
+                                Ph_refl_shear = 0  # to change!!!! Maybe there's a phase shift
+                                phi_initial = processing[o].phase_final + Ph_refl_shear
+                                phi_final = phi_initial + top[processing[o].obj_index].material.kS * lambda_int
+                                phase_shift = processing[o].phase_shift + Ph_refl_shear
+                                sn = Ray(start, end, vray, path, intensity_horcomp, phi_initial, phi_final, phase_shift,
+                                         0, processing[o].obj_index, next_obj, possible_nn, IF, hpol_dir, True)
+                                son.append(sn)
+                                if IF > I_limit:
+                                    control.append(sn)
 
                         Refl_long, Refl_shear, Transm_long = rf.B2MCoef_shear(alpha_in, rho_liquid,
                                                                                           rho_solid, c_long_liquid,
@@ -266,26 +382,43 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
                         if intensity_vert_shear_reflected > I_limit:  # SHEAR VERTICAL REFLECTED
                             vray = v_out / LA.norm(v_out)
                             start = processing[o].end
-                            next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                            next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                         processing[o].obj_index,
                                                                                         final_geometry,
                                                                                         initial_geometry)
-
-                            IF = intensity_vert_shear_reflected * np.exp(
-                                -2 * top[processing[o].obj_index].material.alphaS * lambda_int)
-                            lst = []
-                            lst.append(processing[o].obj_index)
-                            path = (processing[o].path) + lst
-                            Ph_refl_shear = 0  # to change!!!! Maybe there's a phase shift
-                            phi_initial = processing[o].phase_final + Ph_refl_shear
-                            phi_final = phi_initial + top[processing[o].obj_index].material.kS * lambda_int
-                            phase_shift = processing[o].phase_shift + Ph_refl_shear
-                            sn = Ray(start, end, vray, path, intensity_horcomp, phi_initial, phi_final, phase_shift,
-                                     0, processing[o].obj_index, next_obj, possible_nn, IF, vpol_dir_refl, True)
-                            son.append(sn)
-                            if IF > I_limit:
-                                control.append(sn)
-                        print(processing[o].start)
+                            # if np.abs(next_obj - processing[o].obj_index) == 2:
+                            #     # processing[o].obj_index = int(np.abs((next_obj + processing[o].obj_index)) / 2)
+                            #     print("Buggy7.1\n")
+                            #     stop_ray = True
+                            # elif next_obj == processing[o].obj_index and not isinstance(possible_nn, str):
+                            #     # processing[o].obj_index += 1
+                            #     print("Buggy7.2\n")
+                            #     stop_ray = True
+                            # elif processing[o].obj_index == 2 and isinstance(possible_nn, str):
+                            #     # processing[o].obj_index = 1
+                            #     print("Buggy7.3\n")
+                            #     stop_ray = True
+                            # elif (end[0] == -8 or end[0] == 2) and processing[o].obj_index == 2:
+                            #     print("Buggy7.4\n")
+                            #     stop_ray = True
+                            # else:
+                            #     stop_ray = False
+                            if stop_ray is False:
+                                IF = intensity_vert_shear_reflected * np.exp(
+                                    -2 * top[processing[o].obj_index].material.alphaS * lambda_int)
+                                lst = []
+                                lst.append(processing[o].obj_index)
+                                path = (processing[o].path) + lst
+                                Ph_refl_shear = 0  # to change!!!! Maybe there's a phase shift
+                                phi_initial = processing[o].phase_final + Ph_refl_shear
+                                phi_final = phi_initial + top[processing[o].obj_index].material.kS * lambda_int
+                                phase_shift = processing[o].phase_shift + Ph_refl_shear
+                                sn = Ray(start, end, vray, path, intensity_horcomp, phi_initial, phi_final, phase_shift,
+                                         0, processing[o].obj_index, next_obj, possible_nn, IF, vpol_dir_refl, True)
+                                son.append(sn)
+                                if IF > I_limit:
+                                    control.append(sn)
+                        #print(processing[o].start)
                         # longitudinal REFLECTED
                         longrefl_possible, v_out, poldir = rf.reflection2(processing[o].vray, nn, c_shear_solid,
                                                                          c_long_solid)
@@ -294,56 +427,91 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
                             v_out = rf.reflection(processing[o].vray, nn)
                             vray = v_out / LA.norm(v_out)
                             start = processing[o].end
-                            next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                            next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                         processing[o].obj_index,
                                                                                         final_geometry,
                                                                                         initial_geometry)
-                            if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
-                                IF = 0
-                            else:
-                                IF = intensity_longit_reflected * np.exp(
-                                    -2 * top[processing[o].obj_index].material.alphaL * lambda_int)
-                            lst = []
-                            lst.append(processing[o].obj_index)
-                            path = processing[o].path + lst
-                            Ph_refl_long = 0  # to change!!!! Maybe there's a phase shift
-                            phi_initial = processing[o].phase_final + Ph_refl_long
-                            phi_final = phi_initial + top[processing[o].obj_index].material.kL * lambda_int
-                            phase_shift = processing[o].phase_shift + Ph_refl_long
-                            sn = Ray(start, end, vray, path, intensity_longit_reflected, phi_initial, phi_final, phase_shift,
-                                     0, processing[o].obj_index, next_obj, possible_nn, IF, 0, False)
-                            son.append(sn)
-                            if IF > I_limit:
-                                control.append(sn)
+                            # if np.abs(next_obj - processing[o].obj_index) == 2:
+                            #     # processing[o].obj_index = int(np.abs((next_obj + processing[o].obj_index)) / 2)
+                            #     print("Buggy8.1\n")
+                            #     stop_ray = True
+                            # elif next_obj == processing[o].obj_index and not isinstance(possible_nn, str):
+                            #     # processing[o].obj_index += 1
+                            #     print("Buggy8.2\n")
+                            #     stop_ray = True
+                            # elif processing[o].obj_index == 2 and isinstance(possible_nn, str):
+                            #     # processing[o].obj_index = 1
+                            #     print("Buggy8.3\n")
+                            #     stop_ray = True
+                            # elif (end[0] == -8 or end[0] == 2) and processing[o].obj_index == 2:
+                            #     print("Buggy8.4\n")
+                            #     stop_ray = True
+                            # else:
+                            #     stop_ray = False
+                            if stop_ray is False:
+                                if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
+                                    IF = 0
+                                else:
+                                    IF = intensity_longit_reflected * np.exp(
+                                        -2 * top[processing[o].obj_index].material.alphaL * lambda_int)
+                                lst = []
+                                lst.append(processing[o].obj_index)
+                                path = processing[o].path + lst
+                                Ph_refl_long = 0  # to change!!!! Maybe there's a phase shift
+                                phi_initial = processing[o].phase_final + Ph_refl_long
+                                phi_final = phi_initial + top[processing[o].obj_index].material.kL * lambda_int
+                                phase_shift = processing[o].phase_shift + Ph_refl_long
+                                sn = Ray(start, end, vray, path, intensity_longit_reflected, phi_initial, phi_final, phase_shift,
+                                         0, processing[o].obj_index, next_obj, possible_nn, IF, 0, False)
+                                son.append(sn)
+                                if IF > I_limit:
+                                    control.append(sn)
 
                         # LONGITUDINAL REFRACTED
-                        refr, v_out, poldir = rf.refraction(processing[o].Vray, nn, c_shear_solid, c_long_liquid)
+                        refr, v_out, poldir = rf.refraction(processing[o].vray, nn, c_shear_solid, c_long_liquid)
                         intensity_longit_refracted = Transm_long * intensity_vertcomp
                         if intensity_longit_refracted > I_limit and refr ==1:
                             start = processing[o].end
                             vray = v_out / LA.norm(v_out)
-                            next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                            next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                         processing[o].next_obj,
                                                                                         final_geometry,
                                                                                         initial_geometry)
-
-                            if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
-                                IF = 0
-                            else:
-                                IF = intensity_longit_refracted * np.exp(
-                                    -2 * top[processing[o].next_obj].material.alpha * lambda_int)
-                            lst = []
-                            lst.append(processing[o].next_obj)
-                            path = (processing[o].path) + lst
-                            Ph_tr_shift = 0  # TO CHANGE!!! CAN BE DIFFERENT
-                            phi_initial = processing[o].phase_final + Ph_tr_shift
-                            phi_final = phi_initial + top[processing[o].next_obj].material.k * lambda_int
-                            phase_shift = processing[o].phase_shift + Ph_tr_shift
-                            sn = Ray(start, end, vray, path, intensity_longit_refracted, phi_initial, phi_final, phase_shift, 0,
-                                     processing[o].next_obj, next_obj, possible_nn, IF, 0, False)
-                            son.append(sn)
-                            if IF > I_limit:
-                                control.append(sn)
+                            # if np.abs(next_obj - processing[o].next_obj) == 2:
+                            #     # processing[o].next_obj = int(np.abs((next_obj + processing[o].next_obj)) / 2)
+                            #     print("Buggy9.1\n")
+                            #     stop_ray = True
+                            # elif next_obj == processing[o].next_obj and not isinstance(possible_nn, str):
+                            #     # processing[o].next_obj += 1
+                            #     print("Buggy9.2\n")
+                            #     stop_ray = True
+                            # elif processing[o].next_obj == 2 and isinstance(possible_nn, str):
+                            #     # processing[o].next_obj = 1
+                            #     print("Buggy9.3\n")
+                            #     stop_ray = True
+                            # elif (end[0] == -8 or end[0] == 2) and processing[o].next_obj == 2:
+                            #     print("Buggy9.4\n")
+                            #     stop_ray = True
+                            # else:
+                            #     stop_ray = False
+                            if stop_ray is False:
+                                if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
+                                    IF = 0
+                                else:
+                                    IF = intensity_longit_refracted * np.exp(
+                                        -2 * top[processing[o].next_obj].material.alpha * lambda_int)
+                                lst = []
+                                lst.append(processing[o].next_obj)
+                                path = (processing[o].path) + lst
+                                Ph_tr_shift = 0  # TO CHANGE!!! CAN BE DIFFERENT
+                                phi_initial = processing[o].phase_final + Ph_tr_shift
+                                phi_final = phi_initial + top[processing[o].next_obj].material.k * lambda_int
+                                phase_shift = processing[o].phase_shift + Ph_tr_shift
+                                sn = Ray(start, end, vray, path, intensity_longit_refracted, phi_initial, phi_final, phase_shift, 0,
+                                         processing[o].next_obj, next_obj, possible_nn, IF, 0, False)
+                                son.append(sn)
+                                if IF > I_limit:
+                                    control.append(sn)
 
 
 
@@ -370,25 +538,42 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
                     v_out = rf.reflection(processing[o].vray, nn)
                     vray = v_out / LA.norm(v_out)
                     start = processing[o].end
-                    next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                    next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                 processing[o].obj_index,
                                                                                 final_geometry,
                                                                                 initial_geometry)
-                    if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
-                        IF = 0
-                    else:
-                        IF = intens_long_refl * np.exp(-2 * top[processing[o].obj_index].material.alpha * lambda_int)
-                    lst = []
-                    lst.append(processing[o].obj_index)
-                    path = (processing[o].path) + lst
-                    phi_initial = processing[o].phase_final + Ph_refl
-                    phi_final = phi_initial + top[processing[o].obj_index].material.k * lambda_int
-                    sn = Ray(start, end, vray, path, intens_long_refl, phi_initial, phi_final, Ph_refl, 0, processing[o].obj_index,
-                             next_obj, possible_nn, IF,0, False)
-                    son.append(sn)
-
-                    if IF > I_limit:
-                        control.append(sn)
+                    # if np.abs(next_obj - processing[o].obj_index) == 2:
+                    #     # processing[o].obj_index = int(np.abs((next_obj + processing[o].obj_index)) / 2)
+                    #     print("Buggy10.1\n")
+                    #     stop_ray = True
+                    # elif next_obj == processing[o].obj_index and not isinstance(possible_nn, str):
+                    #     # processing[o].obj_index += 1
+                    #     print("Buggy10.2\n")
+                    #     stop_ray = True
+                    # elif processing[o].obj_index == 2 and isinstance(possible_nn, str):
+                    #     # processing[o].obj_index = 1
+                    #     print("Buggy10.3\n")
+                    #     stop_ray = True
+                    # elif (end[0] == -8 or end[0] == 2) and processing[o].obj_index == 2:
+                    #     print("Buggy10.4\n")
+                    #     stop_ray = True
+                    # else:
+                    #     stop_ray = False
+                    if stop_ray is False:
+                        if isinstance(possible_nn, str):  # if possible nn is a string and not a vector
+                            IF = 0
+                        else:
+                            IF = intens_long_refl * np.exp(-2 * top[processing[o].obj_index].material.alpha * lambda_int)
+                        lst = []
+                        lst.append(processing[o].obj_index)
+                        path = (processing[o].path) + lst
+                        phi_initial = processing[o].phase_final + Ph_refl
+                        phi_final = phi_initial + top[processing[o].obj_index].material.k * lambda_int
+                        sn = Ray(start, end, vray, path, intens_long_refl, phi_initial, phi_final, Ph_refl, 0, processing[o].obj_index,
+                                 next_obj, possible_nn, IF,0, False)
+                        son.append(sn)
+                        if IF > I_limit:
+                            control.append(sn)
 
                     # REFRACTED LONGITUDINAL RAY IN BONE
                     longrefrac_possible, v_out, pp = rf.refraction(processing[o].vray, nn, c_long_liquid, c_long_solid)
@@ -397,25 +582,43 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
                         start = processing[o].end
                         I0 = intens_long_refrac
                         vray = v_out / LA.norm(v_out)
-                        next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                        next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                     processing[o].next_obj,
                                                                                     final_geometry,
                                                                                     initial_geometry)
-                        if isinstance(possible_nn, str):
-                            IF = 0
-                        else:
-                            IF = I0 * np.exp(-2 * top[processing[o].next_obj].material.alphaL * lambda_int)
-                        lst = []
-                        lst.append(processing[o].next_obj)
-                        path = (processing[o].path) + lst
-                        phi_initial = processing[o].phase_final + Ph_tr_long
-                        phi_final = phi_initial + top[processing[o].next_obj].material.kL * lambda_int
-                        phase_shift = processing[o].phase_shift + Ph_tr_long
-                        sn = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift, 0, processing[o].next_obj,
-                                 next_obj, possible_nn, IF,0, False)
-                        son.append(sn)
-                        if IF > I_limit:
-                            control.append(sn)
+                        # if np.abs(next_obj - processing[o].next_obj) == 2:
+                        #     # processing[o].next_obj = int(np.abs((next_obj + processing[o].next_obj)) / 2)
+                        #     print("Buggy11.1\n")
+                        #     stop_ray = True
+                        # elif next_obj == processing[o].next_obj and not isinstance(possible_nn, str):
+                        #     # processing[o].next_obj += 1
+                        #     print("Buggy11.2\n")
+                        #     stop_ray = True
+                        # elif processing[o].next_obj == 2 and isinstance(possible_nn, str):
+                        #     # processing[o].next_obj = 1
+                        #     print("Buggy11.3\n")
+                        #     stop_ray = True
+                        # elif (end[0] == -8 or end[0] == 2) and processing[o].next_obj == 2:
+                        #     print("Buggy11.4\n")
+                        #     stop_ray = True
+                        # else:
+                        #     stop_ray = False
+                        if stop_ray is False:
+                            if isinstance(possible_nn, str):
+                                IF = 0
+                            else:
+                                IF = I0 * np.exp(-2 * top[processing[o].next_obj].material.alphaL * lambda_int)
+                            lst = []
+                            lst.append(processing[o].next_obj)
+                            path = (processing[o].path) + lst
+                            phi_initial = processing[o].phase_final + Ph_tr_long
+                            phi_final = phi_initial + top[processing[o].next_obj].material.kL * lambda_int
+                            phase_shift = processing[o].phase_shift + Ph_tr_long
+                            sn = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift, 0, processing[o].next_obj,
+                                     next_obj, possible_nn, IF,0, False)
+                            son.append(sn)
+                            if IF > I_limit:
+                                control.append(sn)
 
                         # if np.abs(start[0] - end[0]) < 0.00001:
                         #   print('something wrong in long')
@@ -429,26 +632,44 @@ def Generation_ray(top, ray, final_geometry, initial_geometry):
                             I0 = intens_shear_refrac
                             vray = v_out / LA.norm(v_out)
                             poldir = poldir / LA.norm(poldir)
-                            next_obj, end, possible_nn, lambda_int = inter.intersection(start, vray, top,
+                            next_obj, end, possible_nn, lambda_int, stop_ray = inter.intersection(start, vray, top,
                                                                                         processing[o].next_obj,
                                                                                         final_geometry,
                                                                                         initial_geometry)
-                            if isinstance(possible_nn, str): # if possible_nn is a string
-                                IF = 0
-                            else:
-                                IF = I0 * np.exp(-2 * top[processing[o].next_obj].material.alphaS * lambda_int)
-                            lst = []
-                            lst.append(processing[o].next_obj)
-                            path = (processing[o].path) + lst
-                            phi_initial = processing[o].phase_final + Ph_tr_shear
-                            phi_final = phi_initial + top[processing[o].next_obj].material.kL * lambda_int
-                            phase_shift = processing[o].phase_shift + Ph_tr_shear
-                            sn = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift, 0,
-                                     processing[o].next_obj,
-                                     next_obj, possible_nn, IF, poldir, True)
-                            son.append(sn)
-                            if IF > I_limit:
-                                control.append(sn)
+                            # if np.abs(next_obj - processing[o].next_obj) == 2:
+                            #     # processing[o].next_obj = int(np.abs((next_obj + processing[o].next_obj)) / 2)
+                            #     print("Buggy12.1\n")
+                            #     stop_ray = True
+                            # elif next_obj == processing[o].next_obj and not isinstance(possible_nn, str):
+                            #     # processing[o].next_obj += 1
+                            #     print("Buggy12.2\n")
+                            #     stop_ray = True
+                            # elif processing[o].next_obj == 2 and isinstance(possible_nn, str):
+                            #     # processing[o].next_obj = 1
+                            #     print("Buggy12.3\n")
+                            #     stop_ray = True
+                            # elif (end[0] == -8 or end[0] == 2) and processing[o].next_obj == 2:
+                            #     print("Buggy12.4\n")
+                            #     stop_ray = True
+                            # else:
+                            #     stop_ray = False
+                            if stop_ray is False:
+                                if isinstance(possible_nn, str): # if possible_nn is a string
+                                    IF = 0
+                                else:
+                                    IF = I0 * np.exp(-2 * top[processing[o].next_obj].material.alphaS * lambda_int)
+                                lst = []
+                                lst.append(processing[o].next_obj)
+                                path = (processing[o].path) + lst
+                                phi_initial = processing[o].phase_final + Ph_tr_shear
+                                phi_final = phi_initial + top[processing[o].next_obj].material.kL * lambda_int
+                                phase_shift = processing[o].phase_shift + Ph_tr_shear
+                                sn = Ray(start, end, vray, path, I0, phi_initial, phi_final, phase_shift, 0,
+                                         processing[o].next_obj,
+                                         next_obj, possible_nn, IF, poldir, True)
+                                son.append(sn)
+                                if IF > I_limit:
+                                    control.append(sn)
                             # if np.abs(start[0] - end[0]) < 0.00001:
                             #    print('something wrong in shear')
 

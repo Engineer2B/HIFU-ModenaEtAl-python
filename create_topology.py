@@ -1,33 +1,76 @@
+from __future__ import print_function
+#%matplotlib inline
+import matplotlib.pyplot as plt
 import numpy as np
+import sys, vtk
+sys.path.append('../')
+import pyoctree
+from pyoctree import pyoctree as ot
+import time
+import math
 import itertools as itool
 unique = np.unique
 array = np.array
 
 
-
-
 class Topology:
-    def __init__(self, geometry=0, material=0): #constructor
+    def __init__(self, geometry=0, material=0):  # constructor
         self.geometry = geometry
         self.material = material
         self.contains = False
-        self.is_contained_in=[]
+        self.is_contained_in = []
 
 
 class Geometry:
-    def __init__(self, type='', xmin=0, ymin=0, zmin=0, lx=0, ly=0, lz=0):  # constructor
+    def __init__(self, type='', xmin=0, ymin=0, zmin=0, lx=0, ly=0, lz=0, filename=""):  # constructor
         self.type = type
-        if self.type == 'plane': # first type -> it's a plane
+        if self.type == 'plane':  # first type -> it's a plane
             self.x = array([xmin, xmin+lx])  # the coordinate the plane is in cm
             self.y = array([ymin, ymin+ly])
             self.z = array([zmin, zmin + lz])
             self.nn = array([-1, 0, 0])  # normal to the plane
             self.point = array([np.random.uniform(xmin+lx/100, xmin+lx-lx/100), np.random.uniform(ymin+ly/100, ymin+ly-ly/100), np.random.uniform(zmin +lz/100, zmin + lz -lz/100)])
             self.volume = lx * ly * lz
+        if self.type == 'ct':  # if the type is ct, we have to import the STL file of CT data
+            self.x = array([xmin, xmin + lx])  # the coordinate the plane is in cm
+            self.y = array([ymin, ymin + ly])
+            self.z = array([zmin, zmin + lz])
+            self.nn = array([-1, 0, 0])  # normal to the plane
+            self.point = array([np.random.uniform(xmin + lx / 100, xmin + lx - lx / 100),
+                                np.random.uniform(ymin + ly / 100, ymin + ly - ly / 100),
+                                np.random.uniform(zmin + lz / 100, zmin + lz - lz / 100)])
+            self.volume = lx * ly * lz
+            # CREATION PF THE OCTREE FROM THE STL FILE:
+            # Read in stl file using vtk
+            reader = vtk.vtkSTLReader()
+            reader.SetFileName(filename)
+            reader.MergingOn()
+            reader.Update()
+            stl = reader.GetOutput()
+            # Extract polygon info from stl
+            # 1. Get array of point coordinates
+            numPoints = stl.GetNumberOfPoints()
+            pointCoords = np.zeros((numPoints, 3), dtype=float)
+            for i in range(numPoints):
+                pointCoords[i, :] = stl.GetPoint(i)
+            # 2. Get polygon connectivity
+            numPolys = stl.GetNumberOfCells()
+            connectivity = np.zeros((numPolys, 3), dtype=np.int32)
+            for i in range(numPolys):
+                atri = stl.GetCell(i)
+                ids = atri.GetPointIds()
+                for j in range(3):
+                    connectivity[i, j] = ids.GetId(j)
+            # Show format of pointCoords
+            pointCoords
+            # Show format of connectivity
+            connectivity
+            # Create octree structure containing stl poly mesh
+            self.tree = ot.PyOctree(pointCoords, connectivity) # tree structure from the STL file
 
 
 class Material:
-    def __init__(self, name='', omega=0, type='', type_geom='', cL=0.0001, alphaL=0, rho=0.00001,kt=0, cp=0,cS=0.0001, alphaS=0 ):  # constructor
+    def __init__(self, name='', omega=0, type='', type_geom='', cL=0.0001, alphaL=0, rho=0.00001, kt=0, cp=0, cS=0.0001, alphaS=0):  # constructor
         self.name = name
         self.omega = omega
         self.type_geom=type_geom
@@ -38,7 +81,6 @@ class Material:
             self.k = self.omega/ self.c
             self.alpha = 0
             self.type = 'liquid'
-
         elif self.name == 'muscle':
             self.c = 153700
             self.rho = 1010e-6
@@ -56,12 +98,10 @@ class Material:
             self.Const7 = 0
             self.kt=0.537
             self.cp=3720
-            self.kS =0
+            self.kS = 0
             self.kL = 0
-            self.alphaS = 0
-            self.alphaL = 0
             self.xi = 0
-            self.eta= 0
+            self.eta = 0
         elif self.name == 'bone':
             self.cL = 373600
             self.rho = 2025e-6
@@ -90,10 +130,10 @@ class Material:
             self.Const5 = (mu * omega * kS + eta * omega ** 2 * alphaS) / 2
             self.Const6 = 1 / self.Const5
             self.Const7 = (-1j * omega) * (1j * kS - alphaS)
-            self.alpha =0
+            self.alpha = 0
             self.z = 0.00001
             self.xi = xi
-            self.eta=eta
+            self.eta = eta
             self.k = 0
             self.cp = 3720
             self.kt = 0.487
@@ -116,6 +156,8 @@ class Material:
                self.eta = 0
                self.kt = kt
                self.cp = cp
+               self.kS = 0
+               self.kL = 0
             else:
                 self.cL = cL
                 self.rho = rho
@@ -148,11 +190,11 @@ class Material:
 
 
 class Transducer:
-    def __init__(self, namefile=0, radius=0): #constructor
-        self.r=radius
+    def __init__(self, namefile=0, radius=0):  #constructor
+        self.r = radius
         input = np.loadtxt(namefile)
-        self.coord= input[:, 0:4]# in m, x,y,z position e.g. trd.coord[3,0] trd 4 x coord or trd.coord[3,1] trd 4 y coord
-        self.coord= np.column_stack((self.coord[:,0],self.coord[:,1]*100-14,self.coord[:, 2:4]*100))
+        self.coord = input[:, 0:4]  # in m, x,y,z position e.g. trd.coord[3,0] trd 4 x coord or trd.coord[3,1] trd 4 y coord
+        self.coord = np.column_stack((self.coord[:, 0], self.coord[:, 1]*100-14, self.coord[:, 2:4]*100))
 
 
 def contains(top):
@@ -202,6 +244,8 @@ def creation_cubes(top, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz):
     for i in range(0, Nx):
         for l in range(0, Ny):
             for k in range(0, Nz):
+                all_dist = []
+                ct_top = []
                 for j in range(0, len(top)):
                     if top[j].geometry.type == 'plane':
                         if xx[i]> top[j].geometry.x[0]\
@@ -210,10 +254,28 @@ def creation_cubes(top, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz):
                                 and yy[l] < top[j].geometry.y[1]\
                                 and  zz[k]> top[j].geometry.z[0]\
                                 and zz[k] < top[j].geometry.z[1]:
-                            material = top[j].material
-                            cb = cube(xx[i], yy[l], zz[k], material, Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz, xxb, yyb, zzb,xx,yy,zz)
-                            cubes.append(cb)
-
+                            material_tmp = top[j].material
+                            # material = top[j].material
+                            # cb = cube(xx[i], yy[l], zz[k], material, Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz, xxb, yyb, zzb,xx,yy,zz)
+                            # cubes.append(cb)
+                    else:
+                        tree = top[j].geometry.tree
+                        dist, bool = inside_outside_ct(tree, xx[i], yy[l], zz[k])
+                        if bool is True:
+                            all_dist.append(dist)
+                            ct_top.append(j)
+                if all_dist != []:
+                    ind2 = all_dist.index(min(all_dist))
+                    true_top = ct_top[ind2]
+                    true_top = int(true_top)
+                    material = top[true_top].material
+                    cb = cube(xx[i], yy[l], zz[k], material, Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy,
+                              dz, xxb, yyb, zzb, xx, yy, zz)
+                    cubes.append(cb)
+                else:
+                    material = material_tmp
+                    cb = cube(xx[i], yy[l], zz[k], material, Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax, dx, dy, dz, xxb, yyb, zzb,xx,yy,zz)
+                    cubes.append(cb)
     return cubes
 
 class cube:
@@ -263,7 +325,7 @@ def FSolvePars(rho, omega, speed ,alpha):
     D = np.sqrt(2)*C/(speed * np.sqrt(rho))
     p_1 = D**2-C
     p_2 = np.sqrt(C**2-p_1**2)/omega
-    return p_1,p_2
+    return p_1, p_2
 
 def check_material(x,y,z, top):
     for j in range(0, len(top)):
@@ -276,3 +338,60 @@ def check_material(x,y,z, top):
                     and z < top[j].geometry.z[1]:
                 material = top[j].material
     return material
+
+def inside_outside_ct(tree, xx, yy, zz):
+    m = 50  # magnitude of vector to calculate destination point
+    start = [xx, yy, zz]
+    # start = [0.99, 0.29, -0.29]
+    vray = [0.5, 0.5, 0.5]
+    vray = [1, 0, 0]
+    destination = [start[0] + vray[0] * m, start[1] + vray[1] * m, start[2] + vray[2] * m]  # destination point
+    destination = np.real(destination)
+    rayPointList = np.array([[start, destination]], dtype=np.float32)
+    ray = rayPointList[0]
+    bool = False
+    inside_dist = []
+    triLabelList = [i.triLabel for i in tree.rayIntersection(ray)]
+    triLabelList
+    triList = [tree.polyList[i] for i in triLabelList]
+    triList
+    face_int = []
+    dist = []
+    sgn = []  # true=+ false=-
+    for i in tree.rayIntersection(ray):
+        face_int.append(i.triLabel)
+        dist.append(np.abs(i.s))
+        if i.s < 0:
+            sgn.append(False)
+        else:
+            sgn.append(True)
+    rayVect = ray[1] - ray[0]
+    rayVect /= np.linalg.norm(rayVect)
+    rayVect
+    if dist != []:
+        ind = dist.index(min(dist))
+        nearest_is = sgn[ind]  # true=+ false=-
+        for tri in triList:
+            if tri.label == face_int[ind]:
+                normal = tri.N  # normal of nearest triangle
+        lambda_bone = min(dist)  # smallest lambda (distance between origin and intersection point)
+        if nearest_is is True:
+            if np.dot(normal, rayVect) > 0:
+                # print(str(k) + ': The point is INSIDE')
+                inside_dist = lambda_bone
+                bool = True
+                # num_top = j
+        else:
+            if np.dot(normal, rayVect) < 0:  # if dot product between calculated normal and ray is positive means that
+                # the ray is coming from inside the bone, so the normal has to be inverted
+                # (because normal are always pointing outside
+                # print(str(k) + ': The point is INSIDE')
+                inside_dist = lambda_bone
+                bool = True
+                # num_top = j
+            # else:
+            #     print(str(k) + ': The point is OUTSIDE')
+            # print(lambda_bone)
+    # else:
+        # print(str(k) + ': No intersection, so the point is OUTSIDE')
+    return inside_dist, bool

@@ -30,18 +30,19 @@ def cal_norm(v1, v2, v3, r, one_matrix):
     return v1, v2, v3
 
 # Splitting the groups is called 256 times (Ntrd times)
-#
+
+
 def Splitting_the_groups(ray_tot, alpha, alphaS, alphaL, type_mat, Const7, Const4, Const6, Const3, k,
-                         kL, kS, xmin, xmax, ymin, ymax, zmin, zmax, xxb,yyb,zzb, dx, dy,dz, Nx,Ny,Nz,z):
+                         kL, kS, xmin, xmax, ymin, ymax, zmin, zmax, xxb, yyb, zzb, dx, dy,dz, Nx, Ny, Nz,z,top):
     # convert in a data_frame
     ray_tot_data_frame = pd.DataFrame([vars(s) for s in ray_tot])
     # convert in tuple ->iteration! It's a vector
     # print(ray_tot_data_frame.shape)
     ray_tot_data_frame['path'] = ray_tot_data_frame['path'].apply(lambda x: tuple(x))
     # cut at the first decimal to avoid too many groups!
-    #ray_tot_data_frame['phase_shift'] = round(ray_tot_data_frame['phase_shift'], 1)
+    # ray_tot_data_frame['phase_shift'] = round(ray_tot_data_frame['phase_shift'], 1)
     # convert in tuple -> nb float not iterable
-    #ray_tot_data_frame['phase_shift'] = tuple(ray_tot_data_frame['phase_shift'])
+    # ray_tot_data_frame['phase_shift'] = tuple(ray_tot_data_frame['phase_shift'])
     # use groupby to group basing on path and phase_shif
     Ray_group = ray_tot_data_frame.groupby(['path']).count()
     Ray_group = Ray_group.reset_index()
@@ -56,22 +57,21 @@ def Splitting_the_groups(ray_tot, alpha, alphaS, alphaL, type_mat, Const7, Const
 
     vl1 = np.zeros((Nx, Ny, Nz))
     one_matrix = np.ones((Nx, Ny, Nz))
-    DD = len(Ray_group)
+
     for i in range(0, len(Ray_group)):
-        # groups : based on on the path
+        # groups : based on on the path and phase shift -> same phase
 
         grp = ray_tot_data_frame[(ray_tot_data_frame.ix[:, 'path'] ==
                                   Ray_group['path'].iat[i])]
 
         int_long, int_shear, nrays_s, nrays_l, phase_shear, phase_long, pol1, pol2, pol3, ks1, ks2, ks3, kl1, kl2, kl3, phase, intensit, nrays = \
-            intensity(grp, alpha, alphaS, alphaL, type_mat, k, kL, kS, Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax, xxb,yyb,zzb, dx, dy,dz)  # here adding eh
+            intensity(grp, alpha, alphaS, alphaL, type_mat, k, kL, kS, Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax, xxb,yyb,zzb, dx, dy,dz, top)  # here adding eh
 
         # soft tissue
         phase = phase / (np.maximum(nrays, one_matrix))
         pressure_one = np.sqrt(intensit * 2 * z) * np.exp(1j * phase)
         # including interference
         pressure = pressure + pressure_one
-
         # bone
         phase_long = phase_long / (np.maximum(nrays_l, one_matrix))
         phase_shear = phase_shear / (np.maximum(nrays_s, one_matrix))
@@ -83,6 +83,7 @@ def Splitting_the_groups(ray_tot, alpha, alphaS, alphaL, type_mat, Const7, Const
         A1 = np.sqrt(Const3 * (int_long * 1e4))
 
         # including interference
+
 
         vl1 = vl1 + A1 * Const4 * np.exp(1j * phase_long) * (kl1 ** 2) + B1 * Const7 * np.exp(1j * phase_shear) * (
                 ks1 * pol1)
@@ -100,7 +101,7 @@ def Splitting_the_groups(ray_tot, alpha, alphaS, alphaL, type_mat, Const7, Const
     return vl1, vl2, vl3, eps12, eps13, eps23, pressure
 
 
-def intensity(rays, alpha, alphaS, alphaL,type_mat, k, kL, kS, Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax, xxb,yyb,zzb, dx, dy,dz):
+def intensity(rays, alpha, alphaS, alphaL,type_mat, k, kL, kS, Nx, Ny, Nz, xmin, xmax, ymin, ymax, zmin, zmax, xxb,yyb,zzb, dx, dy,dz, top):
     # cb_1 = copy.copy(cb)
     # here only the rays with the same phase
 
@@ -128,6 +129,7 @@ def intensity(rays, alpha, alphaS, alphaL,type_mat, k, kL, kS, Nx, Ny, Nz, xmin,
     array = np.array
 
     for ri in range(0, len(rays)):
+        matray = top[rays['obj_index'].iat[ri]].material.type
         start = rays['start'].iat[ri]
         vray = rays['vray'].iat[ri]
         end = rays['end'].iat[ri]
@@ -239,7 +241,7 @@ def intensity(rays, alpha, alphaS, alphaL,type_mat, k, kL, kS, Nx, Ny, Nz, xmin,
                 lambda_12 = (lambda_1 + lambda_2) * (0.5)
                 P_in = start + lambda_1 * vray
                 P_out = start + lambda_2 * vray
-                ind = np.floor((start + lambda_12 * vray - array([xmin, ymin, zmin])) / (array([dx, dy, dz])))
+                ind = np.floor(np.real((start + lambda_12 * vray - array([xmin, ymin, zmin])) / (array([dx, dy, dz]))))
 
                 if vray[0] > 0:  # ray towards positive x
                     if P_out[0] > end[0]:  # ray ends in the cube
@@ -247,7 +249,7 @@ def intensity(rays, alpha, alphaS, alphaL,type_mat, k, kL, kS, Nx, Ny, Nz, xmin,
                         lambda_12 = (lambda_1 + lambda_2) / 2
 
                 else:  # ray towards negative x
-                    if P_out[0] > end[0]:  # ray ends in the cube
+                    if P_out[0] < end[0]:  # ray ends in the cube
                         lambda_2 = (end - start).dot(vray)
                         lambda_12 = (lambda_1 + lambda_2) / 2
 
@@ -268,8 +270,8 @@ def intensity(rays, alpha, alphaS, alphaL,type_mat, k, kL, kS, Nx, Ny, Nz, xmin,
 
                         intensity[index_cube[0], index_cube[1], index_cube[2]] = intensity[index_cube[0], index_cube[1],
                                                                                            index_cube[2]] \
-                                                                                 + (rays['I0'].iat[ri]) * (
-                            np.exp(-2 * alpha[index_cube[0], index_cube[1], index_cube[2]] * lambda_12)) * (
+                                                                                 + (rays['I0'].iat[ri] * (
+                            np.exp(-2 * alpha[index_cube[0], index_cube[1], index_cube[2]] * lambda_12))) * (
                                                                                          (np.abs(
                                                                                              lambda_1 - lambda_2)) / (
                                                                                                      dx * dy * dz))

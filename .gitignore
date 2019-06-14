@@ -1,5 +1,12 @@
+*.stl
 fontlist-v300.json
 *.pylint.d
+# Ignore python code output files
+Q_to_write.txt
+coord_to_write.txt
+mu.txt
+rho.txt
+cp.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

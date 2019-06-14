@@ -1,1 +1,11 @@
+numpy
+scipy
+matplotlib
+ipython
+jupyter
 pandas
+sympy
+nose
+vtk
+pyoctree
+numpy-stl

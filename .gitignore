@@ -1,4 +1,3 @@
-*.stl
 fontlist-v300.json
 *.pylint.d
 # Ignore python code output files

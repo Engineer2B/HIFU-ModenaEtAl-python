@@ -1,0 +1,53 @@
+# This CITATION.cff file was partly generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+authors:
+  - given-names: Daniela
+    family-names: Modena
+    affiliation: >-
+      Eindhoven University of Technology, Eindhoven,
+      Netherlands
+  - given-names: Marco
+    family-names: Baragona
+    email: marco.baragona@philips.com
+    affiliation: 'Philips Research, Eindhoven, Netherlands'
+  - given-names: Dragan
+    family-names: Bosnacki
+    affiliation: >-
+      Eindhoven University of Technology, Eindhoven,
+      Netherlands
+  - given-names: Boris J. T.
+    family-names: Breuer
+    affiliation: >-
+      Eindhoven University of Technology, Eindhoven,
+      The Netherlands
+    orcid: 'https://orcid.org/0000-0002-2621-8046'
+  - given-names: Aaldert
+    family-names: Elevelt
+    affiliation: 'Philips Research, Eindhoven, Netherlands'
+  - given-names: Ralph T. H.
+    family-names: Maessen
+    affiliation: 'Philips Research, Eindhoven, Netherlands'
+  - given-names: Peter A. J.
+    family-names: Hilbers
+    affiliation: >-
+      Eindhoven University of Technology, Eindhoven,
+      Netherlands
+    orcid: 'https://orcid.org/0000-0002-8805-5633'
+  - given-names: Huub M. M.
+    name-particle: ten
+    family-names: Eikelder
+    affiliation: >-
+      Eindhoven University of Technology, Eindhoven,
+      Netherlands
+title: >-
+  Modeling the interference between shear and
+  longitudinal waves under High Intensity Focused
+  Ultrasound propagation in bone
+type: software
+doi: 10.1088/1361-6560/aaef14
+date-released: 2020-03-13
+
